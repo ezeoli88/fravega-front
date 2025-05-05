@@ -1,14 +1,38 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useFavorites } from "@/context/FavoritesContext";
-// Eliminar la importación no utilizada de GitHubUser
-import { useGitHubUsers } from "@/hooks/useGitHubUsers"; // Importar el hook
+import useSWR from "swr";
+import { useState, useEffect } from "react";
+import type { GitHubSearchResponse, GitHubUser } from "@/types/github";
+import { mutate } from "swr";
+import { fetcher } from "@/api/services";
+
 
 export default function Home() {
-  // Usar el hook para obtener estado y funciones
-  const { users, searchTerm, isLoading, error, setSearchTerm } = useGitHubUsers(); 
-  // Mantener el hook de favoritos
+  const [searchTerm, setSearchTerm] = useState("");
   const { toggleFavorite, isFavorite } = useFavorites();
+
+  const url = searchTerm
+    ? `https://api.github.com/search/users?q=${encodeURIComponent(searchTerm)}`
+    : "https://api.github.com/users?per_page=20";
+
+  const { data: users = [], isLoading } = useSWR<GitHubSearchResponse | GitHubUser[]>(
+    url,
+    fetcher
+  );
+
+  const userList = searchTerm ? (users as GitHubSearchResponse).items : users;
+  
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm.trim() !== "") {
+        mutate(url);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, url]);
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -35,15 +59,11 @@ export default function Home() {
           </div>
         )}
 
-        {error && (
-          <div className="text-red-500 text-center py-4 bg-red-50 rounded-lg">
-            {error}
-          </div>
-        )}
 
         {/* Lista de usuarios */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {users.map((user) => (
+          {userList === undefined ?
+            null :  (userList as GitHubUser[]).map((user: GitHubUser) => (
             <div
               key={user.id}
               className="bg-white rounded-lg shadow-md p-6 transition-transform hover:scale-105"
@@ -108,7 +128,7 @@ export default function Home() {
         </div>
 
         {/* Mensaje cuando no hay resultados */}
-        {!isLoading && !error && users.length === 0 && (
+        {!isLoading && (userList as GitHubUser[]).length === 0 && (
           <div className="text-center py-8 text-gray-600">
             No se encontraron usuarios
           </div>
